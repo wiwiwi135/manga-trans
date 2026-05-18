@@ -230,8 +230,18 @@ export function ImageEditor({
   };
 
   const allStrokes = useMemo(() => image.paintStrokes.concat(currentStroke ? [currentStroke] : []), [image.paintStrokes, currentStroke]);
-  const normalStrokes = allStrokes.filter(s => s.tool !== 'bg_erase');
-  const bgEraseStrokes = allStrokes.filter(s => s.tool === 'bg_erase');
+  
+  // If the image is a cleaned zip image (has originalDataUrl) and we are not showing the original,
+  // we should hide all strokes since the image is already clean and user only wants text.
+  const strokesToRender = useMemo(() => {
+    if (image.originalDataUrl && !showOriginal) {
+      return [];
+    }
+    return allStrokes;
+  }, [allStrokes, image.originalDataUrl, showOriginal]);
+
+  const normalStrokes = strokesToRender.filter(s => s.tool !== 'bg_erase');
+  const bgEraseStrokes = strokesToRender.filter(s => s.tool === 'bg_erase');
 
   return (
     <div 

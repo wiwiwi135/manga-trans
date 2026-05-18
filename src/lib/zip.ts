@@ -63,8 +63,12 @@ async function renderImageToDataUrl(img: ProcessedImage, format: 'jpeg' | 'png' 
   });
   layer1.add(new Konva.Image({ image: imageObj, x: 0, y: 0, width: img.width, height: img.height }));
 
-  const normalStrokes = img.paintStrokes.filter(s => s.tool !== 'bg_erase');
-  const bgEraseStrokes = img.paintStrokes.filter(s => s.tool === 'bg_erase');
+  const strokesToRender = img.originalDataUrl 
+    ? [] // Hide all paint strokes when rendering cleaned images, we only want text overlay
+    : img.paintStrokes;
+    
+  const normalStrokes = strokesToRender.filter(s => s.tool !== 'bg_erase');
+  const bgEraseStrokes = strokesToRender.filter(s => s.tool === 'bg_erase');
 
   for (const stroke of normalStrokes) {
     if (stroke.imageBase64 && stroke.rect) {

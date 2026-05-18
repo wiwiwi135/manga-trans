@@ -1,10 +1,11 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, Suspense } from 'react';
 import { Upload, Download, Play, Save, Loader2, Image as ImageIcon, Type as TypeIcon, MousePointer2, Brush, Eraser, PenTool, ZoomIn, ZoomOut, Maximize, Palette, Plus, Pipette, Trash2, ChevronUp, ChevronDown, ImagePlus, Key, Sparkles, Scissors, Undo, Wand2 } from 'lucide-react';
 import { extractImagesFromZip, downloadProcessedZip, downloadPdf, downloadSingleImage } from './lib/zip';
 import { processMangaPages, generateInpaint, RawRegion } from './lib/gemini';
 import { ProcessedImage, Region, PaintStroke } from './types';
-import { ImageEditor } from './components/ImageEditor';
 import { get, set } from 'idb-keyval';
+
+const ImageEditor = React.lazy(() => import('./components/ImageEditor').then(m => ({ default: m.ImageEditor })));
 
 type Tool = 'select' | 'draw' | 'erase' | 'fill_poly' | 'bg_erase' | 'smart_sfx' | 'gen_erase';
 
@@ -159,8 +160,8 @@ export default function App() {
              
              // Remove backgrounds from regions as the image is already cleaned
              const newRegions = target.regions.map(r => ({ ...r, bgColor: 'transparent' }));
-             // Remove erasing/cleaning strokes that might cause scribbles (obsolete due to cleaned zip)
-             const newStrokes = target.paintStrokes.filter(s => s.tool === 'draw' || s.tool === 'smart_sfx');
+             // Remove all paint strokes, since the user only wants texts over the cleaned image
+             const newStrokes: PaintStroke[] = [];
              
              newImages[targetIndex] = {
                ...target,
@@ -886,26 +887,28 @@ export default function App() {
                   )}
                 </div>
               </div>
-              <ImageEditor
-                image={selectedImage}
-                selectedRegionId={selectedRegionId}
-                onSelectRegion={setSelectedRegionId}
-                onUpdateRegion={updateRegion}
-                stageRef={React.createRef()}
-                activeTool={activeTool}
-                brushSize={brushSize}
-                brushColor={brushColor}
-                zoom={zoom}
-                showOriginal={showOriginal}
-                showText={showText}
-                onAddStroke={(stroke) => {
-                  saveHistory(selectedImage.id);
-                  updateImage(selectedImage.id, {
-                    paintStrokes: [...selectedImage.paintStrokes, stroke]
-                  });
-                }}
-                onGenerateInpaint={async (base64) => generateInpaint(base64, selectedImage.mimeType, customApiKey)}
-              />
+              <Suspense fallback={<div className="w-full h-full flex items-center justify-center text-slate-500"><Loader2 className="animate-spin mr-2"/> Loading Editor...</div>}>
+                <ImageEditor
+                  image={selectedImage}
+                  selectedRegionId={selectedRegionId}
+                  onSelectRegion={setSelectedRegionId}
+                  onUpdateRegion={updateRegion}
+                  stageRef={React.createRef()}
+                  activeTool={activeTool}
+                  brushSize={brushSize}
+                  brushColor={brushColor}
+                  zoom={zoom}
+                  showOriginal={showOriginal}
+                  showText={showText}
+                  onAddStroke={(stroke) => {
+                    saveHistory(selectedImage.id);
+                    updateImage(selectedImage.id, {
+                      paintStrokes: [...selectedImage.paintStrokes, stroke]
+                    });
+                  }}
+                  onGenerateInpaint={async (base64) => generateInpaint(base64, selectedImage.mimeType, customApiKey)}
+                />
+              </Suspense>
             </div>
           ) : (
             <div className="text-slate-500 flex flex-col items-center gap-4">
@@ -1094,6 +1097,21 @@ export default function App() {
                 </div>
                 
                 <div className="pt-4 border-t border-slate-800 space-y-2 mt-4">
+                   <button 
+                     className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs py-2 rounded transition-colors flex items-center justify-center gap-2"
+                     onClick={() => {
+                       saveHistory(selectedImage.id);
+                       updateImage(selectedImage.id, {
+                         regions: [...selectedImage.regions, {
+                           ...selectedRegion,
+                           id: crypto.randomUUID(),
+                           y: selectedRegion.y + 40
+                         }]
+                       });
+                     }}
+                   >
+                     <Plus size={14} /> Duplicate text region
+                   </button>
                    <button 
                      className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs py-2 rounded transition-colors flex items-center justify-center gap-2"
                      onClick={() => {
