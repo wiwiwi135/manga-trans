@@ -59,8 +59,38 @@ export default function App() {
 
   const selectedImage = images.find(img => img.id === selectedImageId);
   const selectedRegion = selectedImage?.regions.find(r => r.id === selectedRegionId);
-
   const [showOriginal, setShowOriginal] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger shortcuts if user is typing in an input or textarea
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+      
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedImageId && selectedRegionId) {
+          saveHistory(selectedImageId);
+          setImages(prev => prev.map(img => {
+            if (img.id === selectedImageId) {
+              return { ...img, regions: img.regions.filter(r => r.id !== selectedRegionId) };
+            }
+            return img;
+          }));
+          setSelectedRegionId(null);
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault();
+        if (selectedImageId) {
+          undo(selectedImageId);
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+         // Maybe add action to select all? Though we don't have multiple select regions right now.
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedImageId, selectedRegionId, images]);
 
   const handleSaveProject = () => {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(images));
@@ -128,12 +158,15 @@ export default function App() {
              
              // Remove backgrounds from regions as the image is already cleaned
              const newRegions = target.regions.map(r => ({ ...r, bgColor: 'transparent' }));
+             // Remove bg_erase strokes
+             const newStrokes = target.paintStrokes.filter(s => s.tool !== 'bg_erase');
              
              newImages[targetIndex] = {
                ...target,
                originalDataUrl,
                dataUrl: cleanInfo.dataUrl,
-               regions: newRegions
+               regions: newRegions,
+               paintStrokes: newStrokes
              };
           }
         }
@@ -221,7 +254,7 @@ export default function App() {
     
     try {
       const batchResults = await processMangaPages(
-        batch.map(img => ({ id: img.id, base64Image: img.dataUrl, mimeType: img.mimeType })), 
+        batch.map(img => ({ id: img.id, base64Image: img.originalDataUrl || img.dataUrl, mimeType: img.mimeType })), 
         customApiKey
       );
       
@@ -245,7 +278,7 @@ export default function App() {
              textColor: raw.textColor || '#000000',
              strokeColor: raw.strokeColor || 'transparent',
              strokeWidth: raw.strokeWidth ?? 0,
-             bgColor: raw.bgColor && raw.bgColor !== 'transparent' ? raw.bgColor : (raw.type === 'bubble' ? '#ffffff' : 'transparent'),
+             bgColor: img.originalDataUrl ? 'transparent' : (raw.bgColor && raw.bgColor !== 'transparent' ? raw.bgColor : (raw.type === 'bubble' ? '#ffffff' : 'transparent')),
              fontFamily: raw.fontFamily || (raw.type === 'bubble' ? 'Marhey' : 'Aref Ruqaa'),
              fontSize: raw.fontSize || Math.max(16, Math.floor(height / 4)),
              fontWeight: raw.fontWeight || 'normal',
@@ -274,7 +307,7 @@ export default function App() {
       
       try {
         const batchResults = await processMangaPages(
-          batch.map(img => ({ id: img.id, base64Image: img.dataUrl, mimeType: img.mimeType })), 
+          batch.map(img => ({ id: img.id, base64Image: img.originalDataUrl || img.dataUrl, mimeType: img.mimeType })), 
           customApiKey
         );
         
@@ -298,7 +331,7 @@ export default function App() {
                textColor: raw.textColor || '#000000',
                strokeColor: raw.strokeColor || 'transparent',
                strokeWidth: raw.strokeWidth ?? 0,
-               bgColor: raw.bgColor && raw.bgColor !== 'transparent' ? raw.bgColor : (raw.type === 'bubble' ? '#ffffff' : 'transparent'),
+               bgColor: img.originalDataUrl ? 'transparent' : (raw.bgColor && raw.bgColor !== 'transparent' ? raw.bgColor : (raw.type === 'bubble' ? '#ffffff' : 'transparent')),
                fontFamily: raw.fontFamily || (raw.type === 'bubble' ? 'Marhey' : 'Aref Ruqaa'),
                fontSize: raw.fontSize || Math.max(16, Math.floor(height / 4)),
                fontWeight: raw.fontWeight || 'normal',
@@ -323,7 +356,7 @@ export default function App() {
     updateImage(img.id, { status: 'processing', error: undefined });
     
     try {
-      const results = await processMangaPages([{ id: img.id, base64Image: img.dataUrl, mimeType: img.mimeType }], customApiKey);
+      const results = await processMangaPages([{ id: img.id, base64Image: img.originalDataUrl || img.dataUrl, mimeType: img.mimeType }], customApiKey);
       const rawRegions = results[0]?.regions || [];
       
       const newRegions: Region[] = rawRegions.map(raw => {
@@ -346,7 +379,7 @@ export default function App() {
           textColor: raw.textColor || '#000000',
           strokeColor: raw.strokeColor || 'transparent',
           strokeWidth: raw.strokeWidth ?? 0,
-          bgColor: raw.bgColor && raw.bgColor !== 'transparent' ? raw.bgColor : (raw.type === 'bubble' ? '#ffffff' : 'transparent'),
+          bgColor: img.originalDataUrl ? 'transparent' : (raw.bgColor && raw.bgColor !== 'transparent' ? raw.bgColor : (raw.type === 'bubble' ? '#ffffff' : 'transparent')),
           fontFamily: raw.fontFamily || (raw.type === 'bubble' ? 'Marhey' : 'Aref Ruqaa'),
           fontSize: raw.fontSize || Math.max(16, Math.floor(height / 4)),
           fontWeight: raw.fontWeight || 'normal',
