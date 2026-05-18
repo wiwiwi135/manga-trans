@@ -56,10 +56,11 @@ export default function App() {
   const [brushSize, setBrushSize] = useState(20);
   const [brushColor, setBrushColor] = useState('#ffffff');
   const [zoom, setZoom] = useState(1);
+  const [showOriginal, setShowOriginal] = useState(false);
+  const [showText, setShowText] = useState(true);
 
   const selectedImage = images.find(img => img.id === selectedImageId);
   const selectedRegion = selectedImage?.regions.find(r => r.id === selectedRegionId);
-  const [showOriginal, setShowOriginal] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -158,8 +159,8 @@ export default function App() {
              
              // Remove backgrounds from regions as the image is already cleaned
              const newRegions = target.regions.map(r => ({ ...r, bgColor: 'transparent' }));
-             // Remove bg_erase strokes
-             const newStrokes = target.paintStrokes.filter(s => s.tool !== 'bg_erase');
+             // Remove erasing/cleaning strokes that might cause scribbles (obsolete due to cleaned zip)
+             const newStrokes = target.paintStrokes.filter(s => s.tool === 'draw' || s.tool === 'smart_sfx');
              
              newImages[targetIndex] = {
                ...target,
@@ -630,6 +631,14 @@ export default function App() {
             {showOriginal ? 'Showing Original' : 'View Original'}
           </button>
           
+          <button 
+            onClick={() => setShowText(!showText)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-colors border ${!showText ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'}`}
+          >
+            <TypeIcon size={16} />
+            {showText ? 'Hide Texts' : 'Show Texts'}
+          </button>
+          
           <div className="flex bg-emerald-700/50 rounded-md overflow-hidden border border-emerald-600/30">
             <button 
               onClick={handleExportZip}
@@ -666,8 +675,11 @@ export default function App() {
               className={`relative flex flex-col gap-2 p-3 border-b border-slate-800/50 text-left transition-colors cursor-pointer group ${selectedImageId === img.id ? 'bg-slate-800' : 'hover:bg-slate-800/50'}`}
               onClick={() => setSelectedImageId(img.id)}
             >
-              <div className="relative aspect-[3/4] w-full bg-slate-950 rounded overflow-hidden">
-                <img src={img.dataUrl} alt={img.filename} className="w-full h-full object-cover opacity-80" />
+              <div className="relative aspect-[3/4] w-full bg-slate-950 rounded overflow-hidden flex">
+                {img.originalDataUrl && (
+                  <img src={img.originalDataUrl} alt={`${img.filename} original`} className="w-1/2 h-full object-cover opacity-80 border-r border-slate-700" />
+                )}
+                <img src={img.dataUrl} alt={img.filename} className={`${img.originalDataUrl ? 'w-1/2' : 'w-full'} h-full object-cover opacity-80`} />
                 {img.status === 'processing' && (
                   <div className="absolute inset-0 bg-slate-900/60 flex items-center justify-center">
                     <Loader2 className="animate-spin text-indigo-400" />
@@ -885,6 +897,7 @@ export default function App() {
                 brushColor={brushColor}
                 zoom={zoom}
                 showOriginal={showOriginal}
+                showText={showText}
                 onAddStroke={(stroke) => {
                   saveHistory(selectedImage.id);
                   updateImage(selectedImage.id, {

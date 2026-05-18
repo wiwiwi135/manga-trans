@@ -14,6 +14,7 @@ interface ImageEditorProps {
   brushColor: string;
   zoom: number;
   showOriginal?: boolean;
+  showText?: boolean;
   onAddStroke: (stroke: PaintStroke) => void;
   onGenerateInpaint?: (base64: string) => Promise<string>;
 }
@@ -35,6 +36,7 @@ export function ImageEditor({
   brushColor,
   zoom,
   showOriginal,
+  showText = true,
   onAddStroke,
   onGenerateInpaint
 }: ImageEditorProps) {
@@ -337,7 +339,7 @@ export function ImageEditor({
             )}
 
             {/* Layer 3: Texts and Transformer */}
-            {!showOriginal && (
+            {!showOriginal && showText && (
               <Layer>
                 {image.regions.map((region) => (
                   <Group
