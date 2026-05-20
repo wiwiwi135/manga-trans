@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, Suspense } from 'react';
-import { Upload, Download, Play, Save, Loader2, Image as ImageIcon, Type as TypeIcon, MousePointer2, Brush, Eraser, PenTool, ZoomIn, ZoomOut, Maximize, Palette, Plus, Pipette, Trash2, ChevronUp, ChevronDown, ImagePlus, Key, Sparkles, Scissors, Undo, Wand2 } from 'lucide-react';
+import { Upload, Download, Play, Save, Loader2, Image as ImageIcon, Type as TypeIcon, MousePointer2, Brush, Eraser, PenTool, ZoomIn, ZoomOut, Maximize, Palette, Plus, Pipette, Trash2, ChevronUp, ChevronDown, ImagePlus, Key, Sparkles, Scissors, Undo, Wand2, Settings } from 'lucide-react';
 import { extractImagesFromZip, downloadProcessedZip, downloadPdf, downloadSingleImage } from './lib/zip';
 import { processMangaPages, generateInpaint, RawRegion } from './lib/gemini';
 import { floodFillBubble } from './lib/bubbleDetect';
@@ -41,17 +41,61 @@ export default function App() {
   
   // Settings State
   const [customApiKey, setCustomApiKey] = useState('');
-  const [showApiKeyInput, setShowApiKeyInput] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [customInstructions, setCustomInstructions] = useState('');
+  const [translateJapanese, setTranslateJapanese] = useState(true);
+  const [translateSfx, setTranslateSfx] = useState(true);
+  const [zipMatchMode, setZipMatchMode] = useState<'filename' | 'index'>('filename');
 
   useEffect(() => {
     const savedKey = localStorage.getItem('manga_gemini_key');
     if (savedKey) setCustomApiKey(savedKey);
+    const savedInst = localStorage.getItem('manga_custom_instructions');
+    if (savedInst) setCustomInstructions(savedInst);
+    const savedTransJp = localStorage.getItem('manga_translate_jp');
+    if (savedTransJp !== null) setTranslateJapanese(savedTransJp === 'true');
+    const savedTransSfx = localStorage.getItem('manga_translate_sfx');
+    if (savedTransSfx !== null) setTranslateSfx(savedTransSfx === 'true');
+    const savedMatchMode = localStorage.getItem('manga_zip_match_mode');
+    if (savedMatchMode) setZipMatchMode(savedMatchMode as any);
+    
+    // Preload Arabic fonts
+    const fontsToLoad = [
+      "Cairo", "Tajawal", "Marhey", "Aref Ruqaa", "El Messiri", "Amiri", 
+      "Changa", "Harmattan", "Katibeh", "Lalezar", "Lemonada", "Mada", 
+      "Markazi Text", "Reem Kufi", "Rakkas", "Almarai"
+    ];
+    if ('fonts' in document) {
+      Promise.all(fontsToLoad.map(font => (document as any).fonts.load(`12px "${font}"`)))
+        .catch(console.error);
+    }
   }, []);
 
   const handleApiKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setCustomApiKey(val);
     localStorage.setItem('manga_gemini_key', val);
+  };
+
+  const handleCustomInstructionsChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setCustomInstructions(val);
+    localStorage.setItem('manga_custom_instructions', val);
+  };
+
+  const handleSetTranslateJapanese = (val: boolean) => {
+    setTranslateJapanese(val);
+    localStorage.setItem('manga_translate_jp', String(val));
+  };
+
+  const handleSetTranslateSfx = (val: boolean) => {
+    setTranslateSfx(val);
+    localStorage.setItem('manga_translate_sfx', String(val));
+  };
+  
+  const handleSetZipMatchMode = (val: 'filename' | 'index') => {
+    setZipMatchMode(val);
+    localStorage.setItem('manga_zip_match_mode', val);
   };
   
   // Editor State
@@ -149,11 +193,16 @@ export default function App() {
 
       setImages(prev => {
         const newImages = [...prev];
-        // Match by index or filename
         for (let i = 0; i < cleanedImages.length; i++) {
           const cleanInfo = cleanedImages[i];
-          const matchIndex = newImages.findIndex(img => img.filename === cleanInfo.filename);
-          const targetIndex = matchIndex !== -1 ? matchIndex : i; // fallback to index if names don't match
+          let targetIndex = -1;
+          
+          if (zipMatchMode === 'filename') {
+             targetIndex = newImages.findIndex(img => img.filename === cleanInfo.filename);
+             if (targetIndex === -1) targetIndex = i; // fallback to index if names don't match
+          } else {
+             targetIndex = i;
+          }
           
           if (targetIndex < newImages.length) {
              const target = newImages[targetIndex];
@@ -338,7 +387,10 @@ export default function App() {
     try {
       const batchResults = await processMangaPages(
         batch.map(img => ({ id: img.id, base64Image: img.originalDataUrl || img.dataUrl, mimeType: img.mimeType })), 
-        customApiKey
+        customApiKey,
+        customInstructions,
+        translateJapanese,
+        translateSfx
       );
       
       batchResults.forEach(result => {
@@ -392,7 +444,10 @@ export default function App() {
       try {
         const batchResults = await processMangaPages(
           batch.map(img => ({ id: img.id, base64Image: img.originalDataUrl || img.dataUrl, mimeType: img.mimeType })), 
-          customApiKey
+          customApiKey,
+          customInstructions,
+          translateJapanese,
+          translateSfx
         );
         
         batchResults.forEach(result => {
@@ -441,7 +496,7 @@ export default function App() {
     updateImage(img.id, { status: 'processing', error: undefined });
     
     try {
-      const results = await processMangaPages([{ id: img.id, base64Image: img.originalDataUrl || img.dataUrl, mimeType: img.mimeType }], customApiKey);
+      const results = await processMangaPages([{ id: img.id, base64Image: img.originalDataUrl || img.dataUrl, mimeType: img.mimeType }], customApiKey, customInstructions, translateJapanese, translateSfx);
       const rawRegions = results[0]?.regions || [];
       
       const newRegions: Region[] = rawRegions.map(raw => {
@@ -631,31 +686,108 @@ export default function App() {
           
           <div className="relative">
              <button 
-               onClick={() => setShowApiKeyInput(!showApiKeyInput)}
+               onClick={() => setShowSettingsModal(true)}
                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors border ${customApiKey ? 'bg-emerald-950/40 border-emerald-800 text-emerald-400' : 'bg-[#111] border-[#444] text-slate-300'}`}
              >
-               <Key size={14} />
-               API Key
+               <Settings size={14} />
+               Settings
              </button>
-             
-             {showApiKeyInput && (
-               <div className="absolute top-full left-0 mt-2 p-3 bg-[#111] border border-[#444] rounded-lg shadow-xl w-72 z-50">
-                 <label className="block text-xs font-medium text-slate-300 mb-1.5">Gemini API Key</label>
-                 <input 
-                   type="password" 
-                   value={customApiKey}
-                   onChange={handleApiKeyChange}
-                   placeholder="Enter your API Key..."
-                   className="w-full bg-black border border-[#444] rounded-md p-2 text-sm outline-none focus:border-indigo-500"
-                 />
-                 <p className="text-[10px] text-slate-500 mt-2">Required for using gemini-2.5-flash. Key is saved locally in your browser.</p>
-               </div>
-             )}
           </div>
         </div>
         
-        <div className="flex items-center gap-4">
-          <div className="flex bg-[#111] rounded-md p-1">
+        {showSettingsModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 text-left">
+          <div className="bg-[#111] border border-[#444] rounded-xl w-full max-w-md shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="flex justify-between items-center p-4 border-b border-[#333]">
+              <h2 className="text-lg font-bold text-white">Application Settings</h2>
+              <button 
+                onClick={() => setShowSettingsModal(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-md transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="p-4 overflow-y-auto flex flex-col gap-6">
+              <div className="space-y-2">
+                <label className="flex flex-col text-sm font-medium text-slate-300">
+                  Gemini API Key
+                  <input 
+                    type="password" 
+                    value={customApiKey}
+                    onChange={handleApiKeyChange}
+                    placeholder="Enter your API Key..."
+                    className="w-full bg-black border border-[#444] rounded-md p-2 mt-1 text-sm outline-none focus:border-indigo-500 font-normal"
+                  />
+                </label>
+                <p className="text-[10px] text-slate-500">Required for using gemini-2.5-flash. Key is saved locally in your browser.</p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="flex flex-col text-sm font-medium text-slate-300">
+                  Cleaned ZIP Match Mode
+                  <select 
+                    value={zipMatchMode}
+                    onChange={(e) => handleSetZipMatchMode(e.target.value as 'filename' | 'index')}
+                    className="w-full bg-black border border-[#444] rounded-md p-2 mt-1 text-sm outline-none focus:border-indigo-500 font-normal text-slate-200"
+                  >
+                    <option value="filename">Match by Filename (Recommended)</option>
+                    <option value="index">Match by Order (Index)</option>
+                  </select>
+                </label>
+                <p className="text-[10px] text-slate-500">How to map uploaded cleaned images to the original ones.</p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="flex flex-col text-sm font-medium text-slate-300">
+                  Custom AI Instructions
+                  <textarea 
+                    value={customInstructions}
+                    onChange={handleCustomInstructionsChange}
+                    placeholder="E.g., Translate the text specifically using Egyptian dialect."
+                    className="w-full bg-black border border-[#444] rounded-md p-2 mt-1 text-sm outline-none focus:border-indigo-500 font-normal h-20 resize-y"
+                  />
+                </label>
+                <p className="text-[10px] text-slate-500">Custom instructions supplied to the translation agent.</p>
+              </div>
+
+              <div className="flex flex-col gap-4">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    checked={translateJapanese} 
+                    onChange={(e) => handleSetTranslateJapanese(e.target.checked)}
+                    className="w-4 h-4 rounded border-[#444] bg-black text-indigo-600 focus:ring-indigo-500 focus:ring-offset-black"
+                  />
+                  <span className="text-sm font-medium text-slate-300">Translate text from Japanese</span>
+                </label>
+
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    checked={translateSfx} 
+                    onChange={(e) => handleSetTranslateSfx(e.target.checked)}
+                    className="w-4 h-4 rounded border-[#444] bg-black text-indigo-600 focus:ring-indigo-500 focus:ring-offset-black"
+                  />
+                  <span className="text-sm font-medium text-slate-300">Analyze and translate SFX</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-[#333] flex justify-end">
+              <button 
+                onClick={() => setShowSettingsModal(false)}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer"
+              >
+                Close Settings
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+        <div className="flex items-center gap-4 z-10">
+           <div className="flex bg-[#111] rounded-md p-1">
             <input 
               type="file" 
               accept=".zip" 
@@ -817,9 +949,9 @@ export default function App() {
             >
               <div className="relative aspect-[3/4] w-full bg-black rounded overflow-hidden flex">
                 {img.originalDataUrl && (
-                  <img src={img.originalDataUrl} alt={`${img.filename} original`} className="w-1/2 h-full object-cover opacity-80 border-r border-[#444]" />
+                  <img src={img.originalDataUrl} alt={`${img.filename} original`} loading="lazy" className="w-1/2 h-full object-cover opacity-80 border-r border-[#444]" />
                 )}
-                <img src={img.dataUrl} alt={img.filename} className={`${img.originalDataUrl ? 'w-1/2' : 'w-full'} h-full object-cover opacity-80`} />
+                <img src={img.dataUrl} alt={img.filename} loading="lazy" className={`${img.originalDataUrl ? 'w-1/2' : 'w-full'} h-full object-cover opacity-80`} />
                 {img.status === 'processing' && (
                   <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
                     <Loader2 className="animate-spin text-indigo-400" />
@@ -1009,6 +1141,10 @@ export default function App() {
                             fontStyle: 'normal',
                             textAlign: 'center',
                             lineHeight: 1.2,
+                            letterSpacing: 0,
+                            opacity: 1,
+                            shadowBlur: 0,
+                            shadowColor: 'transparent',
                             autoFitText: true
                           };
                           updateImage(selectedImage.id, { regions: [...selectedImage.regions, newRegion] });

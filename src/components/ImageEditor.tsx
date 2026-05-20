@@ -44,19 +44,42 @@ const AutoFitText = ({ region }: { region: Region }) => {
 
     // Temporarily clear fixed height to let Konva measure the natural text height
     node.height(null);
+    node.wrap('none'); // temporarily turn off wrap to accurately measure single line width
+    
+    // Find the longest word to ensure it fits horizontally
+    const words = (region.translatedText || '').split(/\s+/);
+    const longestWord = words.reduce((a, b) => a.length > b.length ? a : b, '');
+    
+    const styleStr = `${region.fontStyle === 'normal' ? '' : region.fontStyle} ${region.fontWeight === 'normal' ? '' : region.fontWeight}`.trim() || 'normal';
+
+    // We create a temporary node to measure longest word
+    const measureNode = new Konva.Text({
+      text: longestWord,
+      fontFamily: region.fontFamily,
+      fontStyle: styleStr,
+      letterSpacing: region.letterSpacing || 0,
+    });
 
     while (minFontSize <= maxFontSize) {
       const mid = Math.floor((minFontSize + maxFontSize) / 2);
       node.fontSize(mid);
+      node.wrap('word'); // restore word wrap to measure height
       
       const textHeight = node.height();
-      if (textHeight > region.height) {
+      
+      measureNode.fontSize(mid);
+      const longestWordWidth = measureNode.width();
+      
+      // We must fit vertically AND the longest word must fit horizontally
+      if (textHeight > region.height || longestWordWidth > region.width) {
         maxFontSize = mid - 1;
       } else {
         bestFontSize = mid;
         minFontSize = mid + 1;
       }
     }
+    
+    measureNode.destroy();
     
     node.fontSize(bestFontSize);
     node.height(region.height); // restore fixed height for vertical centering
@@ -82,7 +105,7 @@ const AutoFitText = ({ region }: { region: Region }) => {
       lineHeight={region.lineHeight}
       fillAfterStrokeEnabled={true}
       shadowColor={region.shadowColor !== 'transparent' && !!region.shadowColor ? region.shadowColor : undefined}
-      shadowBlur={region.shadowBlur}
+      shadowBlur={region.shadowBlur || 0}
       letterSpacing={region.letterSpacing || 0}
     />
   );

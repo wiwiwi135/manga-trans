@@ -29,9 +29,11 @@ export async function extractImagesFromZip(file: File): Promise<ProcessedImage[]
       img.src = dataUrl;
     });
 
+    const basename = filename.split('/').pop() || filename;
+
     images.push({
       id: Math.random().toString(36).substr(2, 9),
-      filename,
+      filename: basename,
       dataUrl,
       mimeType,
       regions: [],
@@ -42,8 +44,8 @@ export async function extractImagesFromZip(file: File): Promise<ProcessedImage[]
     });
   }
 
-  // Sort alphabetically by filename
-  return images.sort((a, b) => a.filename.localeCompare(b.filename));
+  // Sort naturally by filename
+  return images.sort((a, b) => a.filename.localeCompare(b.filename, undefined, { numeric: true, sensitivity: 'base' }));
 }
 
 async function renderImageToDataUrl(img: ProcessedImage, format: 'jpeg' | 'png' = 'png', quality = 1.0): Promise<string> {
@@ -94,8 +96,26 @@ async function renderImageToDataUrl(img: ProcessedImage, format: 'jpeg' | 'png' 
 
   img.regions.forEach(region => {
     const fontStyleStr = `${region.fontStyle === 'normal' ? '' : region.fontStyle} ${region.fontWeight === 'normal' ? '' : region.fontWeight}`.trim() || 'normal';
-    const group = new Konva.Group({ x: region.x, y: region.y, width: region.width, height: region.height, rotation: region.angle });
-    group.add(new Konva.Text({ text: region.translatedText ? region.translatedText.split('\n').map(line => '\u202B' + line + '\u200F').join('\n') : '', width: region.width, height: region.height, fill: region.textColor, stroke: region.strokeColor !== 'transparent' ? region.strokeColor : undefined, strokeWidth: region.strokeColor !== 'transparent' ? region.strokeWidth : 0, fontFamily: region.fontFamily, fontSize: region.fontSize, fontStyle: fontStyleStr, align: region.textAlign, verticalAlign: 'middle', wrap: 'word', lineHeight: region.lineHeight, fillAfterStrokeEnabled: true }));
+    const group = new Konva.Group({ x: region.x, y: region.y, width: region.width, height: region.height, rotation: region.angle, opacity: region.opacity ?? 1 });
+    group.add(new Konva.Text({ 
+      text: region.translatedText ? region.translatedText.split('\n').map(line => '\u202B' + line + '\u200F').join('\n') : '', 
+      width: region.width, 
+      height: region.height, 
+      fill: region.textColor, 
+      stroke: region.strokeColor !== 'transparent' ? region.strokeColor : undefined, 
+      strokeWidth: region.strokeColor !== 'transparent' ? region.strokeWidth : 0, 
+      fontFamily: region.fontFamily, 
+      fontSize: region.fontSize, 
+      fontStyle: fontStyleStr, 
+      align: region.textAlign, 
+      verticalAlign: 'middle', 
+      wrap: 'word', 
+      lineHeight: region.lineHeight, 
+      fillAfterStrokeEnabled: true,
+      shadowColor: region.shadowColor !== 'transparent' && !!region.shadowColor ? region.shadowColor : undefined,
+      shadowBlur: region.shadowBlur || 0,
+      letterSpacing: region.letterSpacing || 0
+    }));
     layer3.add(group);
   });
   
@@ -166,8 +186,8 @@ export async function downloadPdf(processedImages: ProcessedImage[], setProgress
     } else {
       isFirstPage = false;
       pdf.setPage(1);
-      pdf.internal.pageSize.setWidth(pdfWidth);
-      pdf.internal.pageSize.setHeight(pdfHeight);
+      pdf.internal.pageSize.width = pdfWidth;
+      pdf.internal.pageSize.height = pdfHeight;
     }
     
     pdf.addImage(finalDataUrl, 'JPEG', 0, 0, pdfWidth, pdfHeight);
