@@ -10,6 +10,7 @@ import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
+import { CloudStorage } from './components/CloudStorage';
 
 const ImageEditor = React.lazy(() => import('./components/ImageEditor').then(m => ({ default: m.ImageEditor })));
 
@@ -2863,21 +2864,7 @@ export default function App() {
         )}
 
         {activeNavigationTab === 'cloud' && (
-          <div className="flex-1 flex flex-col items-center justify-center p-8 bg-gradient-to-tr from-[#03010c] via-[#0b0718] to-black relative">
-            <div className="absolute top-10 right-10 w-96 h-96 bg-purple-600/5 rounded-full blur-[140px] pointer-events-none" />
-            <div className="text-center flex flex-col items-center max-w-lg z-10 animate-fade-in">
-              <div className="relative mb-6">
-                {/* Spinning gear (ترس دوار) */}
-                <Settings size={72} className="animate-spin text-purple-500 duration-[4000ms] ease-linear shadow-[0_0_40px_rgba(168,85,247,0.3)] rounded-full p-2 bg-purple-950/20 border border-purple-500/20" />
-                <span className="absolute bottom-0 right-0 w-4.5 h-4.5 bg-purple-500 border border-black rounded-full animate-ping"></span>
-              </div>
-              <h1 className="text-3xl font-display font-semibold text-white tracking-tight mb-2">التخزين السحابي (Cloud Storage)</h1>
-              <p className="text-lg text-purple-300 font-sans mb-4">تحت العمل والتطوير المستمر حالياً...</p>
-              <div className="liquid-glass p-4 rounded-xl border border-purple-500/10 text-xs text-slate-400 font-sans leading-relaxed">
-                نقوم ببناء مخزن سحابي فائق السرعة والأمان لمزامنة قصص المانجا والمانهوا المترجمة لتمكين العمل التعاوني بين المبيضين والمترجمين في الوقت الفعلي.
-              </div>
-            </div>
-          </div>
+          <CloudStorage onBack={() => setActiveNavigationTab('library')} />
         )}
 
         {activeNavigationTab === 'scheduler' && (
